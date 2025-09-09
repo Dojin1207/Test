@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>동적 사이드바 웹사이트</title>
+    <style>
+        /* CSS 변수를 사용해 너비 값을 쉽게 관리합니다 */
+        :root {
+            --sidebar-collapsed-width: 100px;
+            --sidebar-hover-width: 115px;
+            --sidebar-expanded-width: 250px;
+            
+            /* -- 다크모드 색상 변수 -- */
+            --dark-background: #1a1a1a;
+            --dark-surface: #2c2c2c;
+            --dark-text: #f0f0f0;
+            --dark-accent: #6c5ce7;
+            --dark-border: rgba(255, 255, 255, 0.1);
+            
+            --sidebar-offset: 20px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            background-color: var(--dark-background);
+            color: var(--dark-text);
+        }
+
+        .main-container {
+            display: flex;
+            height: 100vh;
+            padding: var(--sidebar-offset);
+            box-sizing: border-box;
+        }
+
+        /* ---------------- 사이드바 스타일 ---------------- */
+        .sidebar {
+            width: var(--sidebar-collapsed-width);
+            background-color: var(--dark-surface);
+            color: var(--dark-text);
+            padding: 20px 0;
+            height: 100%;
+            position: relative;
+            transition: width 0.4s ease;
+            cursor: pointer;
+            overflow: hidden;
+
+            border: 1px solid var(--dark-border);
+            border-radius: 15px;
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        .sidebar:not(.active):hover {
+            width: var(--sidebar-hover-width);
+        }
+
+        .sidebar.active {
+            width: var(--sidebar-expanded-width);
+            cursor: default;
+        }
+        
+        /* 사이드바 메뉴 아이템 스타일 */
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu a {
+            color: var(--dark-text);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            padding: 15px 25px;
+            white-space: nowrap;
+            position: relative;
+
+            border-radius: 10px;
+            margin: 10px 15px;
+            transition: background-color 0.3s ease, border 0.3s ease;
+        }
+
+        /* 클릭되어 활성화된 링크 스타일 */
+        .sidebar-menu a.active-link {
+            background-color: #3a3a3a;
+        }
+
+        .sidebar-menu a:hover {
+            background-color: #3d3d3d;
+            border: 1px solid var(--dark-accent);
+        }
+
+        /* 사이드바가 열렸을 때 (active) 버튼 테두리 */
+        .sidebar.active .sidebar-menu a {
+            border: 1px solid var(--dark-border);
+        }
+        
+        /* 아이콘과 텍스트 스타일링 */
+        .icon {
+            margin-right: 20px;
+            min-width: 30px;
+            font-size: 1.2rem;
+        }
+
+        .text {
+            opacity: 0;
+            transition: opacity 0.3s ease 0.1s;
+        }
+
+        .sidebar.active .text {
+            opacity: 1;
+        }
+        
+        /* ---------------- 메인 콘텐츠 스타일 ---------------- */
+        .main-content {
+            flex-grow: 1;
+            padding: 40px;
+            background-color: var(--dark-background);
+            color: var(--dark-text);
+            transition: filter 0.4s ease, transform 0.4s ease;
+        }
+
+        /* 콘텐츠 섹션 스타일링 */
+        .content-section {
+            display: none;
+            animation: fadeIn 0.5s ease-in-out;
+            background-color: var(--dark-background);
+            color: var(--dark-text);
+        }
+
+        .content-section.active {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            height: 100%;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .sidebar.active + .main-content {
+            filter: blur(5px);
+            transform: scale(0.98);
+            pointer-events: none;
+            user-select: none;
+        }
+        
+        /* ---------------- 알약 모양 버튼 스타일 ---------------- */
+        .pill-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 20px;
+            width: 80%;
+            height: 50vh;
+            margin-top: 20px;
+        }
+
+        .pill-button {
+            background-color: #4a4a4a;
+            color: var(--dark-text);
+            border-radius: 50px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        
+        .pill-button:hover {
+            background-color: #666666;
+        }
+        
+        /* 서버 이름 및 상태 표시기 컨테이너 */
+        .server-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            padding: 0 15px;
+            box-sizing: border-box;
+            position: absolute;
+            top: 15px;
+            left: 0;
+        }
+        
+        /* 서버 이름 알약 스타일 */
+        .server-name-pill {
+            background-color: #666666;
+            color: var(--dark-text);
+            padding: 8px 15px;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+        
+        /* 서버 상태 알약 스타일 */
+        .status-pill {
+            padding: 8px 15px;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+
+        /* 온라인/오프라인 상태 색상 */
+        .status-online {
+            background-color: #2ecc71;
+            color: white;
+        }
+
+        .status-offline {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        /* 버튼 중앙에 큰 텍스트 */
+        .main-pill-text {
+            font-size: 2.5rem;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ---------------- 모달 창 스타일 ---------------- */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease-in-out forwards;
+            opacity: 0;
+        }
+        .modal.visible {
+            display: flex;
+            opacity: 1;
+        }
+        .modal-content {
+            background-color: var(--dark-surface);
+            padding: 30px;
+            border: 1px solid var(--dark-border);
+            border-radius: 15px;
+            width: 300px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            text-align: center;
+            animation: slideIn 0.3s ease-out forwards;
+            position: relative;
+        }
+        .close-button {
+            color: #aaa;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover, .close-button:focus {
+            color: var(--dark-text);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .modal-content input[type="password"] {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #555;
+            background-color: #333;
+            color: var(--dark-text);
+        }
+        .modal-content button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+        .modal-content button.confirm-btn {
+            background-color: var(--dark-accent);
+            color: white;
+        }
+        .modal-content button.confirm-btn:hover {
+            background-color: #5c4ac7;
+        }
+        .modal-content .status-btn {
+            background-color: #4a4a4a;
+            color: white;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .modal-content .status-btn:hover {
+            opacity: 0.8;
+        }
+        .modal-content .status-btn.online {
+            background-color: #2ecc71;
+        }
+        .modal-content .status-btn.offline {
+            background-color: #e74c3c;
+        }
+
+        /* 경고 메시지 스타일 */
+        #password-error-message {
+            color: #e74c3c;
+            font-weight: bold;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        
+        .modal.fade-out {
+            animation: fadeOut 0.3s ease-in-out forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <ul class="sidebar-menu">
+                <li><a href="#" class="nav-link" data-content-target="home-content"><span class="icon">🏠</span> <span class="text">홈</span></a></li>
+                <li><a href="#" class="nav-link" data-content-target="about-content"><span class="icon">👤</span> <span class="text">소개</span></a></li>
+                <li><a href="#" class="nav-link" data-content-target="file-content"><span class="icon">📁</span> <span class="text">파일</span></a></li>
+                <li><a href="#" class="nav-link" data-content-target="server-content"><span class="icon">🌐</span> <span class="text">서버 데이터</span></a></li>
+            </ul>
+        </nav>
+        
+        <main class="main-content">
+            <div id="home-content" class="content-section active">
+                <h1>홈 페이지</h1>
+                <p>환영합니다! 이 페이지는 웹사이트의 첫 화면입니다. 여기에는 주요 정보나 최신 업데이트 내용을 담을 수 있습니다.</p>
+            </div>
+            <div id="about-content" class="content-section">
+                <h1>소개 페이지</h1>
+                <p>저희 웹사이트에 대해 소개합니다. 우리는 혁신적인 기술과 창의적인 아이디어를 결합하여 사용자에게 최고의 경험을 제공합니다.</p>
+            </div>
+            <div id="file-content" class="content-section">
+                <h1>파일 관리</h1>
+                <p>여기는 파일을 관리할 수 있는 페이지입니다. 문서, 사진, 비디오 등을 업로드하고 정리할 수 있습니다.</p>
+                <input type="file" multiple>
+            </div>
+            <div id="server-content" class="content-section">
+                <h1>서버 데이터 확인</h1>
+                <p>현재 서버에 저장된 데이터를 확인하고 관리하는 페이지입니다. 실시간으로 업데이트되는 정보를 볼 수 있습니다.</p>
+                
+                <div class="pill-buttons">
+                    <button class="pill-button" data-server-id="1" data-server-status="online">
+                        <div class="server-info">
+                            <div class="server-name-pill">서버 1</div>
+                            <div class="status-pill status-online">온라인</div>
+                        </div>
+                        <div class="main-pill-text">관리</div>
+                    </button>
+                    <button class="pill-button" data-server-id="2" data-server-status="offline">
+                        <div class="server-info">
+                            <div class="server-name-pill">서버 2</div>
+                            <div class="status-pill status-offline">오프라인</div>
+                        </div>
+                        <div class="main-pill-text">분석</div>
+                    </button>
+                    <button class="pill-button" data-server-id="3" data-server-status="online">
+                        <div class="server-info">
+                            <div class="server-name-pill">서버 3</div>
+                            <div class="status-pill status-online">온라인</div>
+                        </div>
+                        <div class="main-pill-text">다운로드</div>
+                    </button>
+                    <button class="pill-button" data-server-id="4" data-server-status="offline">
+                        <div class="server-info">
+                            <div class="server-name-pill">서버 4</div>
+                            <div class="status-pill status-offline">오프라인</div>
+                        </div>
+                        <div class="main-pill-text">내보내기</div>
+                    </button>
+                    <button class="pill-button" data-server-id="5" data-server-status="online">
+                        <div class="server-info">
+                            <div class="server-name-pill">서버 5</div>
+                            <div class="status-pill status-online">온라인</div>
+                        </div>
+                        <div class="main-pill-text">가져오기</div>
+                    </button>
+                    <button class="pill-button" data-server-id="6" data-server-status="offline">
+                        <div class="server-info">
+                            <div class="server-name-pill">서버 6</div>
+                            <div class="status-pill status-offline">오프라인</div>
+                        </div>
+                        <div class="main-pill-text">설정</div>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>비밀번호 입력</h2>
+            <p>서버 상태를 변경하려면 비밀번호를 입력하세요.</p>
+            <input type="password" id="passwordInput" placeholder="비밀번호">
+            <div id="password-error-message"></div>
+            <button class="confirm-btn">확인</button>
+        </div>
+    </div>
+
+    <div id="statusModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2 id="modalServerName"></h2>
+            <p>서버 상태를 변경하세요.</p>
+            <button class="status-btn online">온라인</button>
+            <button class="status-btn offline">오프라인</button>
+        </div>
+    </div>
+
+    <script>
+        // 사이드바 및 콘텐츠 관련 스크립트 (기존 코드)
+        const sidebarElement = document.querySelector('.sidebar');
+        const linkElements = document.querySelectorAll('.nav-link');
+        const contentSections = document.querySelectorAll('.content-section');
+
+        sidebarElement.addEventListener('click', (event) => {
+            if (event.target.closest('.nav-link')) {
+                return;
+            }
+            sidebarElement.classList.toggle('active');
+        });
+
+        linkElements.forEach(link => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                const targetContentId = link.getAttribute('data-content-target');
+                const targetContent = document.getElementById(targetContentId);
+                
+                document.querySelectorAll('.active-link').forEach(activeLink => {
+                    activeLink.classList.remove('active-link');
+                });
+                contentSections.forEach(content => {
+                    content.classList.remove('active');
+                });
+
+                link.classList.add('active-link');
+                targetContent.classList.add('active');
+                
+                sidebarElement.classList.remove('active');
+            });
+        });
+
+        document.querySelector('.main-content').addEventListener('click', () => {
+            sidebarElement.classList.remove('active');
+        });
+
+        // ---------------- 서버 상태 변경 및 저장/불러오기 로직 ----------------
+        const passwordModal = document.getElementById('passwordModal');
+        const statusModal = document.getElementById('statusModal');
+        const passwordInput = document.getElementById('passwordInput');
+        const confirmBtn = passwordModal.querySelector('.confirm-btn');
+        const closeButtons = document.querySelectorAll('.close-button');
+        const pillButtons = document.querySelectorAll('.pill-button');
+        const statusBtns = statusModal.querySelectorAll('.status-btn');
+        const modalServerName = document.getElementById('modalServerName');
+        const passwordErrorMessage = document.getElementById('password-error-message');
+        
+        let currentServerButton = null;
+        let wrongPasswordCount = 0;
+        const maxWrongAttempts = 3;
+
+        const correctPassword = "1234";
+
+        // 페이지 로드 시 localStorage에서 서버 상태를 불러와 적용
+        function loadServerStatus() {
+            pillButtons.forEach(button => {
+                const serverId = button.getAttribute('data-server-id');
+                const savedStatus = localStorage.getItem(`server_status_${serverId}`);
+                
+                if (savedStatus) {
+                    // 저장된 상태가 있으면 해당 상태로 업데이트
+                    updatePillState(button, savedStatus);
+                }
+            });
+        }
+        
+        // 서버 알약의 시각적 상태를 업데이트하는 재사용 가능한 함수
+        function updatePillState(button, newStatus) {
+            const statusPill = button.querySelector('.status-pill');
+            statusPill.classList.remove('status-online', 'status-offline');
+            statusPill.classList.add(`status-${newStatus}`);
+            statusPill.textContent = newStatus === 'online' ? '온라인' : '오프라인';
+            button.setAttribute('data-server-status', newStatus);
+        }
+
+        // 초기 상태 로드
+        loadServerStatus();
+
+        // 모달을 부드럽게 닫는 함수
+        function closeModalWithAnimation(modalElement) {
+            modalElement.classList.add('fade-out');
+            modalElement.addEventListener('animationend', () => {
+                modalElement.style.display = 'none';
+                modalElement.classList.remove('fade-out');
+            }, { once: true });
+        }
+
+        pillButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                currentServerButton = button;
+                passwordModal.style.display = 'flex';
+                passwordModal.classList.add('visible');
+                passwordInput.value = '';
+                passwordInput.focus();
+                passwordErrorMessage.textContent = '';
+            });
+        });
+
+        confirmBtn.addEventListener('click', () => {
+            if (passwordInput.value === correctPassword) {
+                wrongPasswordCount = 0;
+                closeModalWithAnimation(passwordModal);
+                showStatusModal();
+            } else {
+                wrongPasswordCount++;
+                const remainingAttempts = maxWrongAttempts - wrongPasswordCount;
+
+                if (remainingAttempts > 0) {
+                    passwordErrorMessage.textContent = `비밀번호가 올바르지 않습니다. 남은 시도 횟수: ${remainingAttempts}회.`;
+                } else {
+                    passwordErrorMessage.textContent = `비밀번호를 3회 틀렸습니다. 3초 후 사이트에서 자동 로그아웃됩니다.`;
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                }
+                passwordInput.value = '';
+                passwordInput.focus();
+            }
+        });
+
+        function showStatusModal() {
+            if (!currentServerButton) return;
+            const serverName = currentServerButton.querySelector('.server-name-pill').textContent;
+            modalServerName.textContent = serverName;
+            statusModal.style.display = 'flex';
+            statusModal.classList.add('visible');
+        }
+
+        statusBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const newStatus = btn.classList.contains('online') ? 'online' : 'offline';
+                
+                const serverId = currentServerButton.getAttribute('data-server-id');
+                
+                // localStorage에 상태 저장
+                localStorage.setItem(`server_status_${serverId}`, newStatus);
+
+                updatePillState(currentServerButton, newStatus);
+                
+                closeModalWithAnimation(statusModal);
+            });
+        });
+
+        closeButtons.forEach(button => {
+            button.addEventListener('click', (event) => {
+                const modalToClose = event.target.closest('.modal');
+                if (modalToClose) {
+                    closeModalWithAnimation(modalToClose);
+                }
+            });
+        });
+        
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                if (passwordModal.style.display === 'flex') {
+                    closeModalWithAnimation(passwordModal);
+                } else if (statusModal.style.display === 'flex') {
+                    closeModalWithAnimation(statusModal);
+                }
+            }
+        });
+    </script>
+
+</body>
+</html>
